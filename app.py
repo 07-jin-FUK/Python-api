@@ -42,22 +42,39 @@ def process_image():
     scale_points = points[:4]  # 最初の4点はスケール設定用
     measurement_points = points[4:6]  # 次の2点は実際の計測用
 
-    # 千円札の長さを基準とした実際の距離を計算する関数
-    def calculate_real_length(scale_points, measurement_points, real_length_of_bill=15.5):
-        # スケールポイント（千円札の長辺）の距離をピクセル単位で計算
-        scale_pixel_distance = np.sqrt((scale_points[1]['x'] - scale_points[0]['x']) ** 2 +
-                                       (scale_points[1]['y'] - scale_points[0]['y']) ** 2)
+    # ホモグラフィー変換のためのポイント (千円札の実際のサイズに対応する正しい座標)
+    # 千円札の長辺が15.5cm、短辺が7.6cmと仮定
+    pts_dst = np.array([[0, 0], [155, 0], [155, 76], [0, 76]], dtype=float)  # 単位はミリメートル
 
-        # 計測する2点間の距離（ピクセル単位）
-        measurement_pixel_distance = np.sqrt((measurement_points[1]['x'] - measurement_points[0]['x']) ** 2 +
-                                             (measurement_points[1]['y'] - measurement_points[0]['y']) ** 2)
+    # スケールポイントをOpenCV形式に変換
+    pts_src = np.array([[p['x'], p['y']] for p in scale_points], dtype=float)
 
-        # 実際の長さを換算
-        real_distance = (measurement_pixel_distance / scale_pixel_distance) * real_length_of_bill
-        return real_distance
+    # ホモグラフィー行列を計算
+    h, status = cv2.findHomography(pts_src, pts_dst)
+
+    # 画像をホモグラフィー変換（パース補正）
+    height, width = img.shape[:2]
+    corrected_img = cv2.warpPerspective(img, h, (width, height))
+
+    # 補正された画像上での計測する2点の距離を計算
+    def calculate_real_length(measurement_points, h):
+        # 計測ポイントをホモグラフィー変換
+        pts_measure = np.array([[p['x'], p['y']] for p in measurement_points], dtype=float).reshape(-1, 1, 2)
+        transformed_points = cv2.perspectiveTransform(pts_measure, h)
+
+        # 2点間の距離をピクセル単位で計算
+        point1 = transformed_points[0][0]
+        point2 = transformed_points[1][0]
+        pixel_distance = np.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2)
+
+        # 実際の長さを計算 (ピクセルからmmへの変換)
+        real_length_mm = pixel_distance  # ここでは1ピクセルが1mm相当と仮定
+        real_length_cm = real_length_mm / 10  # cmに変換
+
+        return real_length_cm
 
     # 実際の長さを計算
-    real_length = calculate_real_length(scale_points, measurement_points)
+    real_length = calculate_real_length(measurement_points, h)
 
     return jsonify({
         'message': 'Image processed successfully',
