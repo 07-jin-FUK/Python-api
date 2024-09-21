@@ -81,4 +81,6 @@ def process_image():
         'measured_length': real_length  # 計測結果を返す
     }), 200
 
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
 
