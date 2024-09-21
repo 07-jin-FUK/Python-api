@@ -71,7 +71,7 @@ def process_image():
         real_length_mm = pixel_distance  # ここでは1ピクセルが1mm相当と仮定
         real_length_cm = real_length_mm / 10  # cmに変換
 
-        return real_length_cm
+        return round(real_length_cm, 2)
 
     # 実際の長さを計算
     real_length = calculate_real_length(measurement_points, h)
@@ -81,5 +81,4 @@ def process_image():
         'measured_length': real_length  # 計測結果を返す
     }), 200
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
