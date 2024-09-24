@@ -163,3 +163,74 @@ def process_3d_image():
 def warmup():
     # サーバーをウォームアップするだけで、特に処理は行わない
     return {'status': 'Server is ready'}, 200
+
+# 円柱サイズを測定するためのエンドポイント
+@app.route('/process-cylinder-image', methods=['POST'])
+def process_cylinder_image():
+    if 'image' not in request.files or 'points' not in request.form:
+        return jsonify({'error': 'No image or points provided'}), 400
+
+    # 画像を取得
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    # ファイルの内容をメモリ上で読み込み
+    np_img = np.frombuffer(file.read(), np.uint8)
+
+    # OpenCVで画像をデコード
+    img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+
+    if img is None:
+        return jsonify({'error': 'Unable to read the image'}), 400
+
+    # クライアントから送られた9点のポイントを取得
+    points = request.form.get('points')
+    points = eval(points)  # 文字列をPythonのリストに変換
+
+    if len(points) < 9:
+        return jsonify({'error': 'Not enough points provided'}), 400
+
+    red_points = points[:6]  # 最初の6点は千円札の基準用
+    blue_points = points[6:]  # 次の3点は円柱の計測用
+
+    # ホモグラフィー変換のためのポイント (千円札の実際のサイズに対応する正しい座標)
+    pts_dst_half = np.array([[0, 0], [155/2, 0], [155/2, 76], [0, 76]], dtype=float)  # 千円札の半分
+
+    # 直径と高さ計算用ホモグラフィー行列を計算
+    red_pts_src = np.array([[p['x'], p['y']] for p in [red_points[0], red_points[1], red_points[4], red_points[5]]], dtype=float)
+    h_cylinder, _ = cv2.findHomography(red_pts_src, pts_dst_half)
+
+    # 円柱のサイズ計算
+    def calculate_cylinder_size(points, h):
+        pts_measure = np.array([[p['x'], p['y']] for p in points], dtype=float).reshape(-1, 1, 2)
+        transformed_points = cv2.perspectiveTransform(pts_measure, h)
+
+        # 直径を計算
+        point1 = transformed_points[0][0]
+        point2 = transformed_points[1][0]
+        diameter = np.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2) / 10  # cmに変換
+
+        # 高さを計算
+        height = abs(transformed_points[2][0][1] - (point1[1] + point2[1]) / 2) / 10  # cmに変換
+
+        return diameter, height
+
+    # 直径と高さを計算
+    diameter, height = calculate_cylinder_size(blue_points, h_cylinder)
+
+    # 天面積と側面積を計算
+    top_area = (np.pi * (diameter / 2) ** 2)  # 円の面積 (cm²)
+    side_area = np.pi * diameter * height  # 側面積 (cm²)
+
+    # 体積を計算
+    volume = top_area * height  # 体積 (cm³)
+
+    return jsonify({
+        'message': 'Cylinder size calculated successfully',
+        'diameter': f"{round(diameter, 2)} cm",
+        'height': f"{round(height, 2)} cm",
+        'top_area': f"{round(top_area, 2)} cm²",
+        'side_area': f"{round(side_area, 2)} cm²",
+        'volume': f"{round(volume, 2)} cm³"
+    }), 200
