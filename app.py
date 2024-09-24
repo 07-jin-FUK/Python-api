@@ -158,3 +158,8 @@ def process_3d_image():
         'side_area': f"{side_area} cm²",
         'volume': f"{round(volume, 2)} cm³"
     }), 200
+
+@app.route('/warmup', methods=['POST'])
+def warmup():
+    # サーバーをウォームアップするだけで、特に処理は行わない
+    return {'status': 'Server is ready'}, 200
