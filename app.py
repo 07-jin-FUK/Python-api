@@ -206,13 +206,14 @@ def process_cylinder_image():
         pts_measure = np.array([[p['x'], p['y']] for p in points], dtype=float).reshape(-1, 1, 2)
         transformed_points = cv2.perspectiveTransform(pts_measure, h)
 
-        # 直径を計算
+        # 直径を計算 (bluePoints[0]とbluePoints[1]の距離)
         point1 = transformed_points[0][0]
         point2 = transformed_points[1][0]
         diameter = np.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2) / 10  # cmに変換
 
-        # 高さを計算
-        height = abs(transformed_points[2][0][1] - (point1[1] + point2[1]) / 2) / 10  # cmに変換
+        # 高さを計算 (bluePoints[0]とbluePoints[2]の垂直距離)
+        point3 = transformed_points[2][0]
+        height = abs(point3[1] - point1[1]) / 10  # cmに変換
 
         return diameter, height
 
@@ -234,3 +235,4 @@ def process_cylinder_image():
         'side_area': f"{round(side_area, 2)} cm²",
         'volume': f"{round(volume, 2)} cm³"
     }), 200
+
