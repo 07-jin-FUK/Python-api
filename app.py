@@ -197,28 +197,40 @@ def process_cylinder_image():
     # ホモグラフィー変換のためのポイント (千円札の実際のサイズに対応する正しい座標)
     pts_dst_half = np.array([[0, 0], [155/2, 0], [155/2, 76], [0, 76]], dtype=float)  # 千円札の半分
 
-    # 直径と高さ計算用ホモグラフィー行列を計算
-    red_pts_src = np.array([[p['x'], p['y']] for p in [red_points[0], red_points[1], red_points[4], red_points[5]]], dtype=float)
-    h_cylinder, _ = cv2.findHomography(red_pts_src, pts_dst_half)
+    # 上半分（直径計算用）ホモグラフィー行列を計算
+    red_pts_src_upper = np.array([[p['x'], p['y']] for p in [red_points[0], red_points[1], red_points[4], red_points[5]]], dtype=float)
+    h_cylinder_upper, _ = cv2.findHomography(red_pts_src_upper, pts_dst_half)
 
-    # 円柱のサイズ計算
-    def calculate_cylinder_size(points, h):
-        pts_measure = np.array([[p['x'], p['y']] for p in points], dtype=float).reshape(-1, 1, 2)
-        transformed_points = cv2.perspectiveTransform(pts_measure, h)
+    # 下半分（高さ計算用）ホモグラフィー行列を計算
+    red_pts_src_lower = np.array([[p['x'], p['y']] for p in [red_points[1], red_points[2], red_points[3], red_points[4]]], dtype=float)
+    h_cylinder_lower, _ = cv2.findHomography(red_pts_src_lower, pts_dst_half)
 
-        # 直径を計算 (bluePoints[0]とbluePoints[1]の距離)
-        point1 = transformed_points[0][0]
-        point2 = transformed_points[1][0]
-        diameter = np.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2) / 10  # cmに変換
+  # 直径の計算には上半分のホモグラフィー行列を使用
+def calculate_cylinder_diameter(points, h_upper):
+    pts_measure = np.array([[p['x'], p['y']] for p in points[:2]], dtype=float).reshape(-1, 1, 2)
+    transformed_points = cv2.perspectiveTransform(pts_measure, h_upper)
+    
+    # 直径を計算 (bluePoints[0]とbluePoints[1]の距離)
+    point1 = transformed_points[0][0]
+    point2 = transformed_points[1][0]
+    diameter = np.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2) / 10  # cmに変換
+    return diameter
 
-        # 高さを計算 (bluePoints[0]とbluePoints[2]の垂直距離)
-        point3 = transformed_points[2][0]
-        height = abs(point3[1] - point1[1]) / 10  # cmに変換
+# 高さの計算には下半分のホモグラフィー行列を使用
+def calculate_cylinder_height(points, h_lower):
+    pts_measure = np.array([[p['x'], p['y']] for p in points], dtype=float).reshape(-1, 1, 2)
+    transformed_points = cv2.perspectiveTransform(pts_measure, h_lower)
+    
+    # 高さを計算 (bluePoints[0]とbluePoints[2]の垂直距離)
+    point1 = transformed_points[0][0]
+    point3 = transformed_points[2][0]
+    height = abs(point3[1] - point1[1]) / 10  # cmに変換
+    return height
 
-        return diameter, height
+# 直径と高さをそれぞれ異なるホモグラフィー行列で計算
+diameter = calculate_cylinder_diameter(blue_points, h_cylinder_upper)
+height = calculate_cylinder_height(blue_points, h_cylinder_lower)
 
-    # 直径と高さを計算
-    diameter, height = calculate_cylinder_size(blue_points, h_cylinder)
 
     # 天面積と側面積を計算
     top_area = (np.pi * (diameter / 2) ** 2)  # 円の面積 (cm²)
