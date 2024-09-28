@@ -238,15 +238,28 @@ def process_cylinder_image():
             diameter = np.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2) / 10  # cmに変換
             return diameter
 
-        # 高さの計算には下半分のホモグラフィー行列を使用
-        def calculate_cylinder_height(points, h_lower):
+        # パース補正後のポイントを可視化するための関数
+        def visualize_transformed_points(img, points, h, color=(0, 255, 0)):
+            transformed_points = cv2.perspectiveTransform(np.array(points).reshape(-1, 1, 2), h)
+            for point in transformed_points:
+                x, y = point[0]
+                cv2.circle(img, (int(x), int(y)), 5, color, -1)
+
+        # 円柱の高さの計算
+        def calculate_cylinder_height(points, h_lower, img=None):
             pts_measure = np.array([[p['x'], p['y']] for p in points], dtype=float).reshape(-1, 1, 2)
             transformed_points = cv2.perspectiveTransform(pts_measure, h_lower)
 
-            # 高さを計算 (blue_points[0]とblue_points[2]の垂直距離)
-            point1 = transformed_points[0][0]
-            point3 = transformed_points[2][0]
+            # Optional: 補正後のポイントを可視化（デバッグ用）
+            if img is not None:
+                visualize_transformed_points(img, points, h_lower, color=(255, 0, 0))
+
+            # 高さを計算 (bluePoints[0]とbluePoints[2]の垂直距離)
+            point1 = transformed_points[0][0]  # bluePoints[0] に対応
+            point3 = transformed_points[2][0]  # bluePoints[2] に対応
             height = abs(point3[1] - point1[1]) / 10  # cmに変換
+
+            print(f"Calculated height between bluePoint[0] and bluePoint[2]: {height} cm")
             return height
 
         # 直径と高さをそれぞれ異なるホモグラフィー行列で計算
