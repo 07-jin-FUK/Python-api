@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify
 import cv2
 import numpy as np
 from flask_cors import CORS
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -161,8 +162,13 @@ def process_3d_image():
 
 @app.route('/warmup', methods=['POST'])
 def warmup():
-    # サーバーをウォームアップするだけで、特に処理は行わない
-    return {'status': 'Server is ready'}, 200
+    start_time = time.time()
+
+    # 他のウォームアップ処理をここに追加
+    elapsed_time = time.time() - start_time
+    print(f"Warmup completed in {elapsed_time} seconds")
+
+    return {'status': 'Server is ready', 'time_taken': elapsed_time}, 200
 
 # 円柱サイズを測定するためのエンドポイント
 @app.route('/process-cylinder-image', methods=['POST'])
@@ -227,9 +233,9 @@ def calculate_cylinder_height(points, h_lower):
     height = abs(point3[1] - point1[1]) / 10  # cmに変換
     return height
 
-# 直径と高さをそれぞれ異なるホモグラフィー行列で計算
-diameter = calculate_cylinder_diameter(blue_points, h_cylinder_upper)
-height = calculate_cylinder_height(blue_points, h_cylinder_lower)
+    # 直径と高さをそれぞれ異なるホモグラフィー行列で計算
+    diameter = calculate_cylinder_diameter(blue_points, h_cylinder_upper)
+    height = calculate_cylinder_height(blue_points, h_cylinder_lower)
 
 
     # 天面積と側面積を計算
