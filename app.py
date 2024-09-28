@@ -257,7 +257,8 @@ def process_cylinder_image():
             # 高さを計算 (bluePoints[0]とbluePoints[2]の垂直距離)
             point1 = transformed_points[0][0]  # bluePoints[0] に対応
             point3 = transformed_points[2][0]  # bluePoints[2] に対応
-            height = abs(point3[1] - point1[1]) / 10  # cmに変換
+            # 2点間のユークリッド距離を計算
+            height = np.sqrt((point3[0] - point1[0]) ** 2 + (point3[1] - point1[1]) ** 2) / 10  # cmに変換
 
             print(f"Calculated height between bluePoint[0] and bluePoint[2]: {height} cm")
             return height
