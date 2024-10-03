@@ -190,36 +190,49 @@ def process_3d_image():
             area = vertical_distance * horizontal_distance / 100  # cm²に変換
             return round(vertical_distance / 10, 2), round(horizontal_distance / 10, 2), round(area, 2), transformed_points
 
+        # 天面の各辺の長さを計算する関数
+        def calculate_edges(transformed_points):
+            top_edge = np.sqrt((transformed_points[1][0][0] - transformed_points[0][0][0]) ** 2 +
+                               (transformed_points[1][0][1] - transformed_points[0][0][1]) ** 2)
+            right_edge = np.sqrt((transformed_points[2][0][0] - transformed_points[1][0][0]) ** 2 +
+                                 (transformed_points[2][0][1] - transformed_points[1][0][1]) ** 2)
+            bottom_edge = np.sqrt((transformed_points[3][0][0] - transformed_points[2][0][0]) ** 2 +
+                                  (transformed_points[3][0][1] - transformed_points[2][0][1]) ** 2)
+            left_edge = np.sqrt((transformed_points[0][0][0] - transformed_points[3][0][0]) ** 2 +
+                                (transformed_points[0][0][1] - transformed_points[3][0][1]) ** 2)
 
-       def calculate_edges(transformed_points):
-    top_edge = np.sqrt((transformed_points[1][0][0] - transformed_points[0][0][0]) ** 2 +
-                       (transformed_points[1][0][1] - transformed_points[0][0][1]) ** 2)
-    right_edge = np.sqrt((transformed_points[2][0][0] - transformed_points[1][0][0]) ** 2 +
-                         (transformed_points[2][0][1] - transformed_points[1][0][1]) ** 2)
-    bottom_edge = np.sqrt((transformed_points[3][0][0] - transformed_points[2][0][0]) ** 2 +
-                          (transformed_points[3][0][1] - transformed_points[2][0][1]) ** 2)
-    left_edge = np.sqrt((transformed_points[0][0][0] - transformed_points[3][0][0]) ** 2 +
-                        (transformed_points[0][0][1] - transformed_points[3][0][1]) ** 2)
-
-    return {
-        'top_edge': round(top_edge / 10, 2),
-        'right_edge': round(right_edge / 10, 2),
-        'bottom_edge': round(bottom_edge / 10, 2),
-        'left_edge': round(left_edge / 10, 2)
-    }
-
+            return {
+                'top_edge': round(top_edge / 10, 2),
+                'right_edge': round(right_edge / 10, 2),
+                'bottom_edge': round(bottom_edge / 10, 2),
+                'left_edge': round(left_edge / 10, 2)
+            }
 
         # 天面の縦、横サイズと面積を計算し、各辺の長さも計算
         top_vertical, top_horizontal, top_area, transformed_top_points = calculate_size(blue_points[:4], h_top)
         top_edges = calculate_edges(transformed_top_points)
 
         # 側面の高さと面積を計算
-        side_vertical, side_horizontal, side_area = calculate_size([blue_points[3], blue_points[4], blue_points[5], blue_points[0]], h_side)
+        side_vertical, side_horizontal, side_area, _ = calculate_size([blue_points[3], blue_points[4], blue_points[5], blue_points[0]], h_side)
 
         # 立体体積を計算
         volume = top_area * side_vertical  # 天面積 × 高さ
 
         # 側面の辺を計算
+        def calculate_real_length(measurement_points, h):
+            # 計測ポイントをホモグラフィー変換
+            pts_measure = np.array([[p['x'], p['y']] for p in measurement_points], dtype=float).reshape(-1, 1, 2)
+            transformed_points = cv2.perspectiveTransform(pts_measure, h)
+
+            # 2点間の距離を計算
+            point1 = transformed_points[0][0]
+            point2 = transformed_points[1][0]
+            distance_mm = np.linalg.norm(point2 - point1)  # 距離をミリメートルで計算
+
+            real_length_cm = distance_mm / 10  # cmに変換
+
+            return round(real_length_cm, 2)
+
         side_right_edge = calculate_real_length([blue_points[2], blue_points[5]], h_side)  # 側面右辺
         side_bottom_edge = calculate_real_length([blue_points[4], blue_points[5]], h_side)  # 側面下辺
         side_left_edge = calculate_real_length([blue_points[3], blue_points[4]], h_side)  # 側面左辺
@@ -237,7 +250,6 @@ def process_3d_image():
             'side_bottom_edge': f"{side_bottom_edge} cm",
             'side_left_edge': f"{side_left_edge} cm"
         }), 200
-
 
     except Exception as e:
         print(f"Error occurred: {e}")  # エラーログをサーバーに表示
@@ -304,7 +316,7 @@ def process_cylinder_image():
             return diameter
 
         # 円柱の高さの計算
-        def calculate_cylinder_height(points, h_lower, img=None):
+        def calculate_cylinder_height(points, h_lower):
             pts_measure = np.array([[p['x'], p['y']] for p in points], dtype=float).reshape(-1, 1, 2)
             transformed_points = cv2.perspectiveTransform(pts_measure, h_lower)
 
