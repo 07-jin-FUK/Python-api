@@ -191,23 +191,23 @@ def process_3d_image():
             return round(vertical_distance / 10, 2), round(horizontal_distance / 10, 2), round(area, 2), transformed_points
 
 
-        # 天面の各辺の長さを計算する関数
-        def calculate_edges(transformed_points):
-            top_edge = np.sqrt((transformed_points[1][0][0] - transformed_points[0][0][0]) ** 2 +
-                               (transformed_points[1][0][1] - transformed_points[0][0][1]) ** 2)
-            right_edge = np.sqrt((transformed_points[2][0][0] - transformed_points[1][0][0]) ** 2 +
-                                 (transformed_points[2][0][1] - transformed_points[1][0][1]) ** 2)
-            bottom_edge = np.sqrt((transformed_points[3][0][0] - transformed_points[2][0][0]) ** 2 +
-                                  (transformed_points[3][0][1] - transformed_points[2][0][1]) ** 2)
-            left_edge = np.sqrt((transformed_points[0][0][0] - transformed_points[3][0][0]) ** 2 +
-                                (transformed_points[0][0][1] - transformed_points[3][0][1]) ** 2)
-    
-        return {
-            'top_edge': round(top_edge / 10, 2),
-            'right_edge': round(right_edge / 10, 2),
-            'bottom_edge': round(bottom_edge / 10, 2),
-            'left_edge': round(left_edge / 10, 2)
-        }
+       def calculate_edges(transformed_points):
+    top_edge = np.sqrt((transformed_points[1][0][0] - transformed_points[0][0][0]) ** 2 +
+                       (transformed_points[1][0][1] - transformed_points[0][0][1]) ** 2)
+    right_edge = np.sqrt((transformed_points[2][0][0] - transformed_points[1][0][0]) ** 2 +
+                         (transformed_points[2][0][1] - transformed_points[1][0][1]) ** 2)
+    bottom_edge = np.sqrt((transformed_points[3][0][0] - transformed_points[2][0][0]) ** 2 +
+                          (transformed_points[3][0][1] - transformed_points[2][0][1]) ** 2)
+    left_edge = np.sqrt((transformed_points[0][0][0] - transformed_points[3][0][0]) ** 2 +
+                        (transformed_points[0][0][1] - transformed_points[3][0][1]) ** 2)
+
+    return {
+        'top_edge': round(top_edge / 10, 2),
+        'right_edge': round(right_edge / 10, 2),
+        'bottom_edge': round(bottom_edge / 10, 2),
+        'left_edge': round(left_edge / 10, 2)
+    }
+
 
         # 天面の縦、横サイズと面積を計算し、各辺の長さも計算
         top_vertical, top_horizontal, top_area, transformed_top_points = calculate_size(blue_points[:4], h_top)
