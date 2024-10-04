@@ -14,6 +14,22 @@ CORS(app)
 def hello_world():
     return "Flask API is running!"
 
+import os
+from flask import Flask, request, jsonify
+import cv2
+import numpy as np
+from flask_cors import CORS
+import time
+import json
+
+app = Flask(__name__)
+CORS(app)
+
+# ルートエンドポイント
+@app.route('/')
+def hello_world():
+    return "Flask API is running!"
+
 # 画像アップロードと処理のエンドポイント（長さおよび平面モード）
 @app.route('/process-image', methods=['POST'])
 def process_image():
@@ -71,10 +87,13 @@ def process_image():
             plane_points = points[4:8]
             plane_edges = calculate_plane_edges(plane_points, h)
             area = calculate_area(plane_edges)
+            max_width, max_height = calculate_max_dimensions(plane_edges)
             return jsonify({
                 'message': 'Plane measurement successful',
                 'measured_area': area,
-                'plane_edges': plane_edges
+                'plane_edges': plane_edges,
+                'max_width': max_width,
+                'max_height': max_height
             }), 200
 
         else:
@@ -83,6 +102,55 @@ def process_image():
     except Exception as e:
         print(f"Error occurred: {e}")
         return jsonify({'error': 'Internal server error occurred'}), 500
+
+# 必要な関数の定義
+def calculate_real_length(measurement_points, h):
+    # 計測ポイントをホモグラフィー変換
+    pts_measure = np.array([[p['x'], p['y']] for p in measurement_points], dtype=float).reshape(-1, 1, 2)
+    transformed_points = cv2.perspectiveTransform(pts_measure, h)
+
+    # 2点間の距離を計算
+    point1 = transformed_points[0][0]
+    point2 = transformed_points[1][0]
+    distance_mm = np.linalg.norm(point2 - point1)  # 距離をミリメートルで計算
+
+    real_length_cm = distance_mm / 10  # cmに変換
+
+    return round(real_length_cm, 1)
+
+def calculate_plane_edges(plane_points, h):
+    # 平面ポイントをホモグラフィー変換
+    pts_plane = np.array([[p['x'], p['y']] for p in plane_points], dtype=float).reshape(-1, 1, 2)
+    transformed_points = cv2.perspectiveTransform(pts_plane, h)
+
+    # 各辺の長さを計算
+    edges = {}
+    edges['top_edge'] = np.linalg.norm(transformed_points[1][0] - transformed_points[0][0]) / 10  # cmに変換
+    edges['right_edge'] = np.linalg.norm(transformed_points[2][0] - transformed_points[1][0]) / 10
+    edges['bottom_edge'] = np.linalg.norm(transformed_points[3][0] - transformed_points[2][0]) / 10
+    edges['left_edge'] = np.linalg.norm(transformed_points[0][0] - transformed_points[3][0]) / 10
+
+    # 小数点以下2桁に丸める
+    for key in edges:
+        edges[key] = round(edges[key], 2)
+
+    return edges
+
+def calculate_area(edges):
+    # 平面の面積を計算（長方形として計算）
+    area_cm2 = edges['top_edge'] * edges['left_edge']  # 面積 = 縦 × 横
+    return round(area_cm2, 1)
+
+def calculate_max_dimensions(edges):
+    # 最長横幅と最長縦幅を計算
+    max_width = max(edges['top_edge'], edges['bottom_edge'])
+    max_height = max(edges['left_edge'], edges['right_edge'])
+    return round(max_width, 2), round(max_height, 2)
+
+# サーバーの起動
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
 
 # 必要な関数の定義
 def calculate_real_length(measurement_points, h):
