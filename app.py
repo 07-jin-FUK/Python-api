@@ -5,30 +5,293 @@ import numpy as np
 from flask_cors import CORS
 import time
 import json
+import mysql.connector
+import bcrypt
+import jwt
+import datetime
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
+
+# シークレットキーの設定（JWT用）
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")  # .envファイルから取得
+
+# MySQLの接続情報を環境変数から取得
+def create_connection():
+    connection = mysql.connector.connect(
+        host=os.getenv("DB_HOST"),  # .envファイルから取得
+        user=os.getenv("DB_USER"),  # .envファイルから取得
+        password=os.getenv("DB_PASSWORD"),  # .envファイルから取得
+        database=os.getenv("DB_NAME"),  # .envファイルから取得
+        port=os.getenv("DB_PORT")  # .envファイルから取得
+    )
+    return connection
+
+
+
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    email = request.json.get('email')
+    password = request.json.get('password')
+
+    if not email or not password:
+        return jsonify({'error': 'メールアドレスとパスワードを提供してください'}), 400
+
+    try:
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # データベースからユーザーを検索
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
+
+        if user:
+            # パスワードが正しいか確認
+            if bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+                # JWTトークンを生成
+                token = jwt.encode({
+                    'user_id': user['id'],
+                    'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+                }, app.config['SECRET_KEY'], algorithm="HS256")
+
+                # IDと名前を含むレスポンスを返す
+                return jsonify({'token': token, 'message': 'ログイン成功', 'name': user['name'], 'id': user['id']}), 200
+            else:
+                return jsonify({'error': '無効なメールアドレスまたはパスワード'}), 401
+        else:
+            return jsonify({'error': 'ユーザーが見つかりませんでした'}), 404
+
+    except Exception as e:
+        print(f"Error occurred during login: {e}")
+        return jsonify({'error': 'ログイン中にエラーが発生しました'}), 500
+
+    finally:
+        if conn:
+            conn.close()
+
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    name = request.json.get('name')
+    email = request.json.get('email')
+    password = request.json.get('password')
+
+    if not name or not email or not password:
+        return jsonify({'error': '名前、メールアドレス、パスワードを提供してください'}), 400
+
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+    try:
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (name, email, password) VALUES (%s, %s, %s)", (name, email, hashed_password.decode('utf-8')))
+        conn.commit()
+        return jsonify({'message': 'ユーザー登録に成功しました'}), 201
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return jsonify({'error': 'ユーザー登録に失敗しました'}), 500
+    finally:
+        conn.close()
+
+
 
 # ルートエンドポイント
 @app.route('/')
 def hello_world():
     return "Flask API is running!"
 
-import os
-from flask import Flask, request, jsonify
-import cv2
-import numpy as np
-from flask_cors import CORS
-import time
-import json
 
-app = Flask(__name__)
-CORS(app)
 
-# ルートエンドポイント
-@app.route('/')
-def hello_world():
-    return "Flask API is running!"
+@app.route('/spaces', methods=['GET'])
+def get_spaces():
+    user_id = request.args.get('user_id')
+    try:
+        conn = create_connection()
+        cursor = conn.cursor()
+        
+        # user_id に基づいてスペースを取得
+        cursor.execute("SELECT * FROM spaces WHERE user_id = %s", (user_id,))
+        spaces = cursor.fetchall()
+
+        if not spaces:
+            return jsonify({'error': 'No spaces found for this user'}), 404
+
+        space_list = []
+        for space in spaces:
+            space_data = {
+                'id': space[0],
+                'user_id': space[1],
+                'dimensions': space[6],
+                'background_color': space[7],
+                'floor_color': space[8],
+                'back_color': space[10],
+                'left_side_color': space[11],
+                'right_side_color': space[12],
+                'is_single_sided': space[9],
+            }
+            space_list.append(space_data)
+
+        return jsonify({'spaces': space_list}), 200
+
+    except Exception as e:
+        print(f"Error occurred while fetching spaces: {e}")
+        return jsonify({'error': 'Failed to fetch spaces'}), 500
+    finally:
+        conn.close()
+
+@app.route('/spaces/<int:user_id>/save-objects', methods=['POST'])
+def save_objects(user_id):
+    data = request.json
+    objects = data.get('objects', [])
+
+    if not objects:
+        return jsonify({'error': 'オブジェクト情報が不足しています'}), 400
+
+    try:
+        conn = create_connection()
+        cursor = conn.cursor()
+
+        # user_id に基づいて既存のオブジェクトを削除
+        cursor.execute("DELETE FROM objects WHERE user_id = %s", (user_id,))
+
+        # 新しいオブジェクト情報を保存
+        for obj in objects:
+            cursor.execute(
+                """
+                INSERT INTO objects (user_id, object_type, position, size, color, is_wireframe)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (user_id, obj['object_type'], json.dumps(obj['position']), json.dumps(obj['size']), obj['color'], obj.get('isWireframe', False))
+            )
+
+        conn.commit()
+        return jsonify({'message': 'オブジェクトが保存されました'}), 200
+    except Exception as e:
+        print(f"Error saving objects: {e}")
+        return jsonify({'error': 'オブジェクト保存中にエラーが発生しました'}), 500
+    finally:
+        conn.close()
+
+
+
+@app.route('/spaces/<int:user_id>/objects', methods=['GET'])
+def get_objects(user_id):
+    try:
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # user_id に基づいてオブジェクトを取得
+        cursor.execute("SELECT * FROM objects WHERE user_id = %s", (user_id,))
+        objects = cursor.fetchall()
+
+        return jsonify({'objects': objects}), 200
+    except Exception as e:
+        print(f"Error fetching objects: {e}")
+        return jsonify({'error': 'オブジェクト取得中にエラーが発生しました'}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/spaces/<int:user_id>', methods=['GET'])
+def get_space(user_id):
+    try:
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True, buffered=True)  # buffered=Trueを追加
+
+        cursor.execute("SELECT * FROM spaces WHERE user_id = %s", (user_id,))
+        space = cursor.fetchone()
+
+        if not space:
+            return jsonify({'error': '空間が見つからないか、権限がありません'}), 404
+
+        return jsonify({'space': space}), 200
+
+    except Exception as e:
+        print(f"Error occurred while retrieving space: {e}")  
+        return jsonify({'error': '空間の取得に失敗しました'}), 500
+
+    finally:
+        cursor.close()  
+        conn.close()
+
+
+
+@app.route('/spaces/<int:user_id>/save', methods=['POST'])
+def save_space(user_id):
+    data = request.json
+    try:
+        conn = create_connection()
+        cursor = conn.cursor(buffered=True)  # buffered=Trueを追加
+
+        # user_id に基づいて空間の存在を確認して削除
+        cursor.execute("DELETE FROM spaces WHERE user_id = %s", (user_id,))
+
+        # 新しい空間の情報を挿入
+        cursor.execute(
+            """INSERT INTO spaces (user_id, dimensions, background_color, floor_color, 
+                                    back_color, left_side_color, right_side_color, is_single_sided) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (
+                user_id,
+                json.dumps(data['dimensions']),
+                data['backgroundColor'],
+                data['floorColor'],
+                data['backColor'],
+                data['leftSideColor'],
+                data['rightSideColor'],
+                data['isSingleSided']
+            )
+        )
+
+        conn.commit()
+        return jsonify({'message': 'Space saved successfully'}), 201
+
+    except Exception as e:
+        print(f"Error occurred while saving: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to save space'}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+
+@app.route('/users/<int:user_id>/spaces', methods=['GET'])
+def get_user_spaces(user_id):
+    conn = create_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM spaces WHERE user_id = %s", (user_id,))
+        spaces = cursor.fetchall()
+        return jsonify(spaces), 200
+    except Exception as e:
+        print(e)
+        return jsonify({'error': 'Failed to retrieve spaces'}), 500
+    finally:
+        conn.close()
+
+
+
+@app.route('/users', methods=['GET'])
+def get_users():
+    try:
+        conn = create_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users")
+        users = cursor.fetchall()
+        conn.close()
+        return jsonify(users), 200
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return jsonify({'error': 'Internal server error occurred'}), 500
+
 
 # 画像アップロードと処理のエンドポイント（長さおよび平面モード）
 @app.route('/process-image', methods=['POST'])
@@ -495,4 +758,4 @@ def warmup():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000 , debug=True)
