@@ -20,16 +20,19 @@ CORS(app, supports_credentials=True)
 # シークレットキーの設定（JWT用）
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")  # .envファイルから取得
 
-# MySQLの接続情報を環境変数から取得
 def create_connection():
-    connection = mysql.connector.connect(
-        host=os.getenv("DB_HOST"),  # .envファイルから取得
-        user=os.getenv("DB_USER"),  # .envファイルから取得
-        password=os.getenv("DB_PASSWORD"),  # .envファイルから取得
-        database=os.getenv("DB_NAME"),  # .envファイルから取得
-        port=os.getenv("DB_PORT")  # .envファイルから取得
-    )
-    return connection
+    try:
+        connection = mysql.connector.connect(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=os.getenv("DB_PORT")
+        )
+        return connection
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        return None
 
 
 
@@ -43,6 +46,7 @@ def login():
     if not email or not password:
         return jsonify({'error': 'メールアドレスとパスワードを提供してください'}), 400
 
+    conn = None
     try:
         conn = create_connection()
         cursor = conn.cursor(dictionary=True)
@@ -88,6 +92,7 @@ def register():
 
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
+    conn = None
     try:
         conn = create_connection()
         cursor = conn.cursor()
