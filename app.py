@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": "https://objectsize-fine.vercel.app"}})
 
 # シークレットキーの設定（JWT用）
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")  # .envファイルから取得
